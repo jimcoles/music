@@ -1,13 +1,14 @@
 package org.jkcsoft.music.theory;
 
 import jm.JMC;
+import jm.constants.Frequencies;
 import jm.midi.MidiSynth;
 import jm.music.data.Note;
 import jm.music.data.Part;
 import jm.music.data.Phrase;
 import jm.music.data.Score;
+import org.jkcsoft.music.render.AudioPlayer;
 import org.jkcsoft.music.synthesis.SinWaveForm;
-import org.jkcsoft.music.util.AudioUtil;
 
 import javax.sound.midi.InvalidMidiDataException;
 import javax.sound.midi.MidiDevice;
@@ -18,6 +19,8 @@ import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 
+import static org.jkcsoft.music.util.AudioUtil.print;
+
 /**
  * Created by jcoles on 7/22/16.
  * Copyright 2016 Jim Coles (jameskcoles@gmail.com).
@@ -26,13 +29,15 @@ public class Notes {
 
     private static final Comparator<AbstractNote> noteFreqComp = (o1, o2) -> o1.getFrequency() > o2.getFrequency() ? 1 : -1;
     private static final AbsoluteFreqNote refNote = new AbsoluteFreqNote(110.0d);
+    private static List<AbsoluteFreqNote> constMultNotes;
 
     public static void main(String[] args) {
         noteDumper();
-        AudioUtil.print("============================================================");
+        print("============================================================");
 //        playSomethingMidi();
-        playRawAudio();
-        AudioUtil.print("normal exit");
+//        playRawAudio();
+        playChord();
+        print("normal exit");
     }
 
     private static void noteDumper() {
@@ -79,13 +84,13 @@ public class Notes {
      */
     private static void printRationalNotes(int notesPerScale, AbsoluteFreqNote refNote)
     {
-        AudioUtil.print("=== Rational Notes =======================================");
+        print("=== Rational Notes =======================================");
 
         List<RationalNote> relativeNotes = getManyRationalNotes(notesPerScale, refNote);
 
-        AudioUtil.print("ref note: " + refNote);
+        print("ref note: " + refNote);
         for(AbstractNote note : relativeNotes) {
-            AudioUtil.print("Note: " + note);
+            print("Note: " + note);
         }
     }
 
@@ -104,15 +109,15 @@ public class Notes {
     }
 
     private static void printULRNotes(int notesPerScale, AbsoluteFreqNote refNote) {
-        AudioUtil.print("==== Unique Rational Notes ========================================================");
+        print("==== Unique Rational Notes ========================================================");
 
         List<RationalNote> relativeNotes = getUniqueRationalNotes();
 
-        AudioUtil.print("ref note: " + refNote);
+        print("ref note: " + refNote);
         int num = 1;
         for(RationalNote note : relativeNotes) {
             String pad = new String(new char[ ( note.getRefNumPeaks() - 1 ) * 2]).replace('\0', ' ');
-            AudioUtil.print("Note ("+ num++ +"): " + new String(pad) + note);
+            print("Note ("+ num++ +"): " + new String(pad) + note);
         }
     }
 
@@ -133,7 +138,7 @@ public class Notes {
                 }
             }
             if (relativeNotes.size() >= maxNotesPerScale) {
-                AudioUtil.print("stopping note search");
+                print("stopping note search");
                 break;
             }
         }
@@ -143,14 +148,14 @@ public class Notes {
     }
 
     private static void printConstMultipleNotes(AbsoluteFreqNote refNote) {
-        AudioUtil.print("======== Const Multiple Notes ====================================================");
+        print("======== Const Multiple Notes ====================================================");
         int numSteps = 12;
-        AudioUtil.print("Const Mult: " + computeMultiple(numSteps));
+        print("Const Mult: " + computeMultiple(numSteps));
 
         int num = 0;
-        List<AbsoluteFreqNote> constMultNotes = getConstMultNotes(refNote, numSteps);
+        constMultNotes = getConstMultNotes(refNote, numSteps);
         for (AbsoluteFreqNote note : constMultNotes) {
-            AudioUtil.print("Note ("+ num++ +"): " + note);
+            print("Note ("+ num++ +"): " + note);
         }
 
     }
@@ -176,16 +181,16 @@ public class Notes {
     private static void playSomethingMidi() {
         MidiDevice.Info[] midiDeviceInfos = MidiSystem.getMidiDeviceInfo();
         for (MidiDevice.Info info : midiDeviceInfos) {
-            AudioUtil.print("Midi Device: " + info);
+            print("Midi Device: " + info);
         }
 
         MidiSynth midi = new MidiSynth();
         Score score = new Score();
-        AudioUtil.print("playing");
-        Note refNote = new Note(110.0d, JMC.SEMI_QUAVER);
+        print("playing");
+        Note refNote = new Note(JMC.C4, JMC.SEMI_QUAVER);
 
         Part part = score.createPart();
-        part.setInstrument(JMC.PIANO);
+        part.setInstrument(JMC.SINE_WAVE);
         Phrase phrase = part.createPhrase();
 
         // play harmonic notes ...
@@ -197,7 +202,7 @@ public class Notes {
         play(midi, score);
 
         try {
-            AudioUtil.print("sleeping for 30 seconds");
+            print("sleeping for 30 seconds");
             Thread.sleep(30000);
         } catch (InterruptedException e) {
             e.printStackTrace();
@@ -206,7 +211,7 @@ public class Notes {
         // play const mult notes ...
         score = new Score();
         part = score.createPart();
-        part.setInstrument(JMC.PIANO);
+        part.setInstrument(JMC.SINE_WAVE);
         phrase = part.createPhrase();
         List<? extends AbstractNote> cmNotes = getConstMultNotes();
         for(AbstractNote myNote : cmNotes) {
@@ -222,50 +227,49 @@ public class Notes {
         } catch (InvalidMidiDataException e) {
             e.printStackTrace();
         }
-        AudioUtil.print("played");
+        print("played");
     }
 
+    private static AudioPlayer audioPlayer = new AudioPlayer();
+
     public static void playRawAudio() {
-        Mixer.Info[] mixersInfos = AudioUtil.dumpMixerInfo();
-
-        Mixer.Info mixerInfo = mixersInfos[0];
-
         try {
-//            AudioFileFormat mp3Format = AudioSystem.getAudioFileFormat(new File("/Users/jcoles/Documents/My Music/ACDC - Dirty Deeds Done Dirt Cheap.mp3"));
-//            print("mp3 format: " + mp3Format);
-
-            Mixer mixer = AudioSystem.getMixer(mixerInfo);
-            //12 = {AudioFormat@731} "PCM_SIGNED 44100.0 Hz, 16 bit, stereo, 4 bytes/frame, little-endian"
-            //13 = {AudioFormat@732} "PCM_SIGNED 44100.0 Hz, 16 bit, stereo, 4 bytes/frame, big-endian"
-            AudioFormat bestMusicFormat =
-                    new AudioFormat(AudioFormat.Encoding.PCM_SIGNED, 44100.0f, 16, 2, 4, 44100.0f, true);
-//            TargetDataLine targetDataLine = AudioSystem.getTargetDataLine(bestMusicFormat);
-//            targetDataLine.open(bestMusicFormat);
-            SourceDataLine sourceDataLine = AudioSystem.getSourceDataLine(bestMusicFormat);
-            sourceDataLine.addLineListener(new LineListener() {
-                @Override
-                public void update(LineEvent event) {
-                    AudioUtil.print("line event: " + event);
-                }
-            });
-            sourceDataLine.open(bestMusicFormat);
-            sourceDataLine.start();
-            int oneSecBufferSize = (int) bestMusicFormat.getSampleRate()
-                    * bestMusicFormat.getFrameSize()
-                    * bestMusicFormat.getChannels();
-
-            for (int i = 1; i <= 1; i++) {
+            audioPlayer.initLine(Formats.BEST_MUSIC_FORMAT);
+            for (int i = 1; i <= 10; i++) {
                 long t1 = System.currentTimeMillis();
-                byte[] buffer = snippetSinWave(100.d * i, bestMusicFormat, 0.2f, .5);
-                AudioUtil.print("compute time millis ["+(System.currentTimeMillis() - t1)+"]");
-                AudioUtil.print("writing buffer ["+i+"]");
-                sourceDataLine.write(buffer, 0, buffer.length);
-                Thread.sleep(2000);
+                byte[] buffer = snippetSinWave(100.d * i, Formats.BEST_MUSIC_FORMAT, 0.2f, .5);
+                print("compute time millis ["+(System.currentTimeMillis() - t1)+"]");
+                print("writing buffer ["+i+"]");
+                audioPlayer.playRawAudio(buffer);
             }
-            Thread.sleep(5000);
-            sourceDataLine.flush();
-            sourceDataLine.stop();
-            sourceDataLine.close();
+            audioPlayer.closeLine();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void playChord() {
+        try {
+            AudioFormat audioFormat = Formats.BEST_MUSIC_FORMAT;
+            double duration = 2.0;
+            float scaleVolume = 0.2f;
+
+            audioPlayer.initLine(audioFormat);
+
+            float[] buffer1 = snippetSinWaveReal(Frequencies.FRQ[JMC.C4], audioFormat.getSampleRate(), scaleVolume, duration);
+            float[] buffer2 = snippetSinWaveReal(Frequencies.FRQ[JMC.E4], audioFormat.getSampleRate(), scaleVolume, duration);
+            float[] buffer3 = snippetSinWaveReal(Frequencies.FRQ[JMC.G4], audioFormat.getSampleRate(), scaleVolume, duration);
+
+            float[] merged = new float[Math.max(buffer1.length, buffer2.length)];
+
+            for(int idx = 0; idx < buffer1.length; idx++) {
+                merged[idx] = buffer1[idx] + buffer2[idx] + buffer3[idx];
+            }
+
+            byte[] buffer = formatToBytes(merged, audioFormat.getChannels(), audioFormat.getSampleSizeInBits() / 8);
+            audioPlayer.playRawAudio(buffer);
+
+            audioPlayer.closeLine();
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -288,36 +292,49 @@ public class Notes {
         if (format.getSampleSizeInBits() != 16)
             throw new IllegalArgumentException("currently only 16 bit (short int) support");
 
-        int bytesPerSamplePerChannel = format.getSampleSizeInBits() / 8;
-        int bytesPerFrame = bytesPerSamplePerChannel * format.getChannels();
+        float[] allSnippetSamplesOneChannel = snippetSinWaveReal(freq, format.getSampleRate(), scaleVolume, duration);
+        byte[] snippetAsBytes =
+                formatToBytes(allSnippetSamplesOneChannel, format.getChannels(), format.getSampleSizeInBits() / 8);
+        return snippetAsBytes;
+    }
+
+    private static byte[] formatToBytes(float[] allSnippetSamplesOneChannel, int numChannels, int bytesPerSamplePerChannel) {
+        byte[] waveAllBytes = new byte[allSnippetSamplesOneChannel.length * numChannels * bytesPerSamplePerChannel];
         ByteBuffer bbSample = ByteBuffer.allocate(bytesPerSamplePerChannel);
-        int totalNumOfSamplesPerChannel = (int) (format.getSampleRate() * duration);
-        int totalNumOfCycles = (int) (freq * duration);
-        int numBytesTotal = totalNumOfSamplesPerChannel * format.getFrameSize();
-        byte[] waveAllBytes = new byte[numBytesTotal];
-        int samplesPerCycle = (int) (format.getSampleRate() / freq);
-        int totalBytesPerCycle = samplesPerCycle * bytesPerSamplePerChannel * format.getChannels();
-        // TODO genericize
-        SinWaveForm sinWaveForm = new SinWaveForm();
-        float[] oneCycleSamples = sinWaveForm.genForm(samplesPerCycle);
-        //
-        for (int idxSample = 0; idxSample < oneCycleSamples.length; idxSample++) {
-            float floatVal = oneCycleSamples[idxSample];
-            short shortValue = (short) (Short.MAX_VALUE * floatVal * scaleVolume);
+        for (int idxSample = 0; idxSample < allSnippetSamplesOneChannel.length; idxSample++) {
+            float floatVal = allSnippetSamplesOneChannel[idxSample];
+            short shortValue = (short) (Short.MAX_VALUE * floatVal);
             bbSample.clear();
             bbSample.putShort(shortValue);
-            int destPosCh1 = idxSample * bytesPerFrame;
+            int destPosCh1 = idxSample * numChannels * bytesPerSamplePerChannel;
             System.arraycopy(bbSample.array(), 0, waveAllBytes, destPosCh1, bytesPerSamplePerChannel);
-            if (format.getChannels() == 2) {
+            if (numChannels == 2) {
                 // copy 2nd channel
                 System.arraycopy(bbSample.array(), 0, waveAllBytes, destPosCh1 + bytesPerSamplePerChannel, bytesPerSamplePerChannel);
             }
         }
-        for (int idxCycle = 1; idxCycle < totalNumOfCycles; idxCycle++) {
-            System.arraycopy(waveAllBytes, 0, waveAllBytes, idxCycle * totalBytesPerCycle, totalBytesPerCycle);
-        }
         return waveAllBytes;
     }
 
+    /**
+     * Keep model in the real-valued world.
+     */
+    public static float[] snippetSinWaveReal(double freq, float sampleRate, float scaleVolume, double duration) {
+        int totalNumOfSamples = (int) (sampleRate * duration);
+        float[] waveAllSamples = new float[totalNumOfSamples];
+        int totalNumOfCycles = (int) (freq * duration);
+        int samplesPerCycle = (int) (sampleRate / freq);
+        // TODO genericize
+        SinWaveForm sinWaveForm = new SinWaveForm();
+        float[] oneCycleSamplesNorm = sinWaveForm.genForm(samplesPerCycle);
+        //
+        for (int idxSample = 0; idxSample < oneCycleSamplesNorm.length; idxSample++) {
+            waveAllSamples[idxSample] = oneCycleSamplesNorm[idxSample] * scaleVolume;
+        }
+        for (int idxCycle = 1; idxCycle < totalNumOfCycles; idxCycle++) {
+            System.arraycopy(waveAllSamples, 0, waveAllSamples, idxCycle * samplesPerCycle, samplesPerCycle);
+        }
+        return waveAllSamples;
+    }
 
 }

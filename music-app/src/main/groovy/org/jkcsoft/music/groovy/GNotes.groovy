@@ -1,4 +1,4 @@
-package org.jkcsoft.music.theory;
+package org.jkcsoft.music.groovy;
 
 import java.util.LinkedList;
 import java.util.List;
@@ -44,6 +44,8 @@ public class GNotes {
         }
 
         List<Integer> possibleNotePeaksPerRefPeaks;
+
+        println("hello groovy")
 
     }
 }
